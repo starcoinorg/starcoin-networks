@@ -1,8 +1,5 @@
 name: Daily Stdlib and Genesis Update
 
-env:
-  STARCOIN_AUTOMATION_PAT: ${{ secrets.STARCOIN_AUTOMATION_PAT }}
-
 on:
   schedule:
     # 01:00 Beijing (UTC+8) == 17:00 UTC on the previous day
@@ -24,6 +21,7 @@ jobs:
     outputs:
       updated: ${{ steps.git_status.outputs.changed }}
       latest_sha: ${{ steps.commit.outputs.sha }}
+      pat_present: ${{ steps.pat_status.outputs.present }}
     steps:
       - name: Checkout latest branch
         uses: actions/checkout@v4
@@ -58,6 +56,17 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Check automation token availability
+        id: pat_status
+        env:
+          STARCOIN_AUTOMATION_PAT: ${{ secrets.STARCOIN_AUTOMATION_PAT }}
+        run: |
+          if [[ -n "${STARCOIN_AUTOMATION_PAT:-}" ]]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Configure git author
         if: steps.git_status.outputs.changed == 'true'
         run: |
@@ -77,15 +86,17 @@ jobs:
         run: git push origin HEAD:latest
 
       - name: Note missing starcoin PAT
-        if: ${{ steps.git_status.outputs.changed == 'true' && env.STARCOIN_AUTOMATION_PAT == '' }}
+        if: ${{ steps.git_status.outputs.changed == 'true' && steps.pat_status.outputs.present == 'false' }}
         run: |
           echo "STARCOIN_AUTOMATION_PAT is not configured; skipping the starcoin PR step." >&2
 
   open-pr:
     name: Open PR updating starcoin submodule
     needs: update-assets
-    if: ${{ needs.update-assets.outputs.updated == 'true' && env.STARCOIN_AUTOMATION_PAT != '' }}
+    if: ${{ needs.update-assets.outputs.updated == 'true' && needs.update-assets.outputs.pat_present == 'true' }}
     runs-on: ubuntu-latest
+    env:
+      STARCOIN_AUTOMATION_PAT: ${{ secrets.STARCOIN_AUTOMATION_PAT }}
     steps:
       - name: Checkout starcoin repository
         uses: actions/checkout@v4
