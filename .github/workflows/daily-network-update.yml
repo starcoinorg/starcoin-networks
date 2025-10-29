@@ -1,5 +1,8 @@
 name: Daily Stdlib and Genesis Update
 
+env:
+  STARCOIN_AUTOMATION_PAT: ${{ secrets.STARCOIN_AUTOMATION_PAT }}
+
 on:
   schedule:
     # 01:00 Beijing (UTC+8) == 17:00 UTC on the previous day
@@ -74,18 +77,14 @@ jobs:
         run: git push origin HEAD:latest
 
       - name: Note missing starcoin PAT
-        if: |
-          steps.git_status.outputs.changed == 'true' &&
-          secrets.STARCOIN_AUTOMATION_PAT == ''
+        if: ${{ steps.git_status.outputs.changed == 'true' && env.STARCOIN_AUTOMATION_PAT == '' }}
         run: |
           echo "STARCOIN_AUTOMATION_PAT is not configured; skipping the starcoin PR step." >&2
 
   open-pr:
     name: Open PR updating starcoin submodule
     needs: update-assets
-    if: |
-      needs.update-assets.outputs.updated == 'true' &&
-      secrets.STARCOIN_AUTOMATION_PAT != ''
+    if: ${{ needs.update-assets.outputs.updated == 'true' && env.STARCOIN_AUTOMATION_PAT != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout starcoin repository
@@ -95,7 +94,7 @@ jobs:
           ref: dual-verse-dag
           fetch-depth: 0
           submodules: true
-          token: ${{ secrets.STARCOIN_AUTOMATION_PAT }}
+          token: ${{ env.STARCOIN_AUTOMATION_PAT }}
 
       - name: Update networks submodule reference
         run: |
@@ -118,7 +117,7 @@ jobs:
         if: steps.submodule_diff.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ secrets.STARCOIN_AUTOMATION_PAT }}
+          token: ${{ env.STARCOIN_AUTOMATION_PAT }}
           branch: automation/update-networks-${{ needs.update-assets.outputs.latest_sha }}
           base: dual-verse-dag
           title: "chore: update networks submodule to ${{ needs.update-assets.outputs.latest_sha }}"
